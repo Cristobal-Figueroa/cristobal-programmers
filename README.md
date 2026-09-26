@@ -4,7 +4,7 @@
 
 This repository hosts the semester-long group project for **CSE 325: .NET Software Development** (BYU-Idaho). The team will design and develop a web application using the **.NET / Blazor** technology stack.
 
-The final project will be selected from the proposals below during the next weekly meeting (Wednesdays at 6:00 PM ET).
+**Selected project (W03): StockWise — Inventory & Sales Manager.** See [PROPOSAL.md](PROPOSAL.md) for the full project proposal.
 
 ## Team Members
 
@@ -12,7 +12,7 @@ The final project will be selected from the proposals below during the next week
 
 ## Project Proposals
 
-### 1. Inventory & Sales Manager
+### 1. Inventory & Sales Manager ✅ *(selected — now "StockWise")*
 A web app for small businesses to manage products, stock levels, and daily sales.
 - **Features:** product CRUD, low-stock alerts, sales register, daily/weekly sales reports, category filters.
 - **Target audience:** small shop owners and family businesses that currently track inventory on paper or spreadsheets.
