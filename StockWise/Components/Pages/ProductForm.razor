@@ -1,0 +1,143 @@
+@page "/products/new"
+@page "/products/edit/{Id:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.EntityFrameworkCore
+@using StockWise.Data
+@using StockWise.Models
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>@(isEdit ? "Edit" : "New") Product - StockWise</PageTitle>
+
+<h1>@(isEdit ? "Edit Product" : "New Product")</h1>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@if (!loaded)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="product" OnValidSubmit="SaveAsync" FormName="product-form" class="col-md-6">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <InputText class="form-control" @bind-Value="product.Name" />
+            <ValidationMessage For="() => product.Name" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <InputTextArea class="form-control" @bind-Value="product.Description" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Category</label>
+            <InputSelect class="form-select" @bind-Value="product.CategoryId">
+                @foreach (var c in categories)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Price</label>
+                <InputNumber class="form-control" @bind-Value="product.Price" />
+                <ValidationMessage For="() => product.Price" />
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Cost</label>
+                <InputNumber class="form-control" @bind-Value="product.Cost" />
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Stock</label>
+                <InputNumber class="form-control" @bind-Value="product.Stock" />
+                <ValidationMessage For="() => product.Stock" />
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Low-stock threshold</label>
+                <InputNumber class="form-control" @bind-Value="product.LowStockThreshold" />
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-outline-secondary" href="products">Cancel</a>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Product product = new();
+    private List<Category> categories = new();
+    private bool isEdit => Id != 0;
+    private bool loaded;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            categories = await db.Categories.OrderBy(c => c.Name).ToListAsync();
+
+            if (categories.Count == 0)
+            {
+                errorMessage = "Create at least one category before adding products.";
+                loaded = true;
+                return;
+            }
+
+            if (isEdit)
+            {
+                var existing = await db.Products.FindAsync(Id);
+                if (existing is null)
+                {
+                    errorMessage = "Product not found.";
+                }
+                else
+                {
+                    product = existing;
+                }
+            }
+            else
+            {
+                product.CategoryId = categories[0].Id;
+            }
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load the form: {ex.Message}";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (isEdit)
+            {
+                db.Products.Update(product);
+            }
+            else
+            {
+                db.Products.Add(product);
+            }
+            await db.SaveChangesAsync();
+            Nav.NavigateTo("products");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not save the product: {ex.Message}";
+        }
+    }
+}

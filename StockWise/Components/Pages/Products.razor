@@ -1,0 +1,153 @@
+@page "/products"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.EntityFrameworkCore
+@using StockWise.Data
+@using StockWise.Helpers
+@using StockWise.Models
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>Products - StockWise</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Products</h1>
+    <a class="btn btn-primary" href="products/new">New Product</a>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+@if (successMessage is not null)
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+<div class="row g-2 mb-3">
+    <div class="col-md-6">
+        <input class="form-control" placeholder="Search by name..." @bind="search" @bind:event="oninput" />
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" @bind="categoryFilter">
+            <option value="0">All categories</option>
+            @foreach (var c in categories)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (!loaded)
+{
+    <p><em>Loading...</em></p>
+}
+else if (FilteredProducts.Count == 0)
+{
+    <p class="text-muted">No products found.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Name</th><th>Category</th><th>Price</th><th>Cost</th><th>Stock</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in FilteredProducts)
+            {
+                <tr>
+                    <td>@p.Name</td>
+                    <td>@p.Category?.Name</td>
+                    <td>@FormatHelper.CLP(p.Price)</td>
+                    <td>@FormatHelper.CLP(p.Cost)</td>
+                    <td>
+                        @if (p.IsLowStock)
+                        {
+                            <span class="badge bg-danger">@p.Stock low</span>
+                        }
+                        else
+                        {
+                            @p.Stock
+                        }
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="products/edit/@p.Id">Edit</a>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => productToDelete = p">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (productToDelete is not null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Delete product</h5></div>
+                <div class="modal-body">
+                    Are you sure you want to delete <strong>@productToDelete.Name</strong>?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => productToDelete = null">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteProduct">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Product> products = new();
+    private List<Category> categories = new();
+    private Product? productToDelete;
+    private bool loaded;
+    private string? errorMessage;
+    private string? successMessage;
+    private string search = string.Empty;
+    private int categoryFilter;
+
+    private List<Product> FilteredProducts => products
+        .Where(p => string.IsNullOrWhiteSpace(search) || p.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+        .Where(p => categoryFilter == 0 || p.CategoryId == categoryFilter)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            products = await db.Products.Include(p => p.Category).OrderBy(p => p.Name).ToListAsync();
+            categories = await db.Categories.OrderBy(c => c.Name).ToListAsync();
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load products: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteProduct()
+    {
+        if (productToDelete is null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Products.Remove(productToDelete);
+            await db.SaveChangesAsync();
+            successMessage = $"Product '{productToDelete.Name}' was deleted.";
+            productToDelete = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            productToDelete = null;
+            errorMessage = $"Could not delete the product: {ex.Message}";
+        }
+    }
+}

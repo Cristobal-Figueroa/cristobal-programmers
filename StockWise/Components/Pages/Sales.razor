@@ -1,0 +1,72 @@
+@page "/sales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.EntityFrameworkCore
+@using StockWise.Data
+@using StockWise.Helpers
+@using StockWise.Models
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>Sales - StockWise</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Sales History</h1>
+    <a class="btn btn-primary" href="sales/new">New Sale</a>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@if (!loaded)
+{
+    <p><em>Loading...</em></p>
+}
+else if (sales.Count == 0)
+{
+    <p class="text-muted">No sales registered yet.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr><th>#</th><th>Date</th><th>Items</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var s in sales)
+            {
+                <tr>
+                    <td>@s.Id</td>
+                    <td>@s.Date.ToString("g")</td>
+                    <td>@s.Items.Count</td>
+                    <td>@FormatHelper.CLP(s.Total)</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="sales/@s.Id">Details</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Sale> sales = new();
+    private bool loaded;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            sales = await db.Sales.Include(s => s.Items)
+                            .OrderByDescending(s => s.Date).ToListAsync();
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load sales: {ex.Message}";
+        }
+    }
+}

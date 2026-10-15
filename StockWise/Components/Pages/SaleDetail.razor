@@ -1,0 +1,69 @@
+@page "/sales/{Id:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.EntityFrameworkCore
+@using StockWise.Data
+@using StockWise.Helpers
+@using StockWise.Models
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Sale #@Id - StockWise</PageTitle>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (sale is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <h1>Sale #@sale.Id</h1>
+    <p class="text-muted">@sale.Date.ToString("f")</p>
+
+    <table class="table" style="max-width: 700px">
+        <thead>
+            <tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var item in sale.Items)
+            {
+                <tr>
+                    <td>@item.Product?.Name</td>
+                    <td>@item.Quantity</td>
+                    <td>@FormatHelper.CLP(item.UnitPrice)</td>
+                    <td>@FormatHelper.CLP(item.LineTotal)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h4>Total: @FormatHelper.CLP(sale.Total)</h4>
+    <a class="btn btn-outline-secondary" href="sales">Back to sales</a>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Sale? sale;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            sale = await db.Sales.Include(s => s.Items)
+                                 .ThenInclude(i => i.Product)
+                                 .FirstOrDefaultAsync(s => s.Id == Id);
+            if (sale is null)
+            {
+                errorMessage = "Sale not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load the sale: {ex.Message}";
+        }
+    }
+}

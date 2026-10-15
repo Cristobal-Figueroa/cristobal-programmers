@@ -1,0 +1,139 @@
+@page "/categories"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.EntityFrameworkCore
+@using StockWise.Data
+@using StockWise.Models
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>Categories - StockWise</PageTitle>
+
+<h1>Categories</h1>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+@if (successMessage is not null)
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+<EditForm Model="newCategory" OnValidSubmit="AddAsync" FormName="category-form" class="row g-2 mb-4 col-md-6">
+    <DataAnnotationsValidator />
+    <div class="col-auto">
+        <InputText class="form-control" placeholder="New category name" @bind-Value="newCategory.Name" />
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Add</button>
+    </div>
+</EditForm>
+
+@if (!loaded)
+{
+    <p><em>Loading...</em></p>
+}
+else if (categories.Count == 0)
+{
+    <p class="text-muted">No categories yet.</p>
+}
+else
+{
+    <table class="table table-striped col-md-6" style="max-width: 600px">
+        <thead>
+            <tr><th>Name</th><th>Products</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var c in categories)
+            {
+                <tr>
+                    <td>@c.Name</td>
+                    <td>@c.Products.Count</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => categoryToDelete = c"
+                                disabled="@(c.Products.Count > 0)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (categoryToDelete is not null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Delete category</h5></div>
+                <div class="modal-body">
+                    Are you sure you want to delete <strong>@categoryToDelete.Name</strong>?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => categoryToDelete = null">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteAsync">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Category> categories = new();
+    private Category newCategory = new();
+    private Category? categoryToDelete;
+    private bool loaded;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            categories = await db.Categories.Include(c => c.Products).OrderBy(c => c.Name).ToListAsync();
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load categories: {ex.Message}";
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Categories.Add(newCategory);
+            await db.SaveChangesAsync();
+            successMessage = $"Category '{newCategory.Name}' was added.";
+            newCategory = new();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not add the category: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (categoryToDelete is null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Categories.Remove(categoryToDelete);
+            await db.SaveChangesAsync();
+            successMessage = $"Category '{categoryToDelete.Name}' was deleted.";
+            categoryToDelete = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            categoryToDelete = null;
+            errorMessage = $"Could not delete the category: {ex.Message}";
+        }
+    }
+}

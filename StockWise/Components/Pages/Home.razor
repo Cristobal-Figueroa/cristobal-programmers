@@ -1,7 +1,152 @@
 ﻿@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.EntityFrameworkCore
+@using StockWise.Data
+@using StockWise.Helpers
+@using StockWise.Models
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@rendermode InteractiveServer
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard - StockWise</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Dashboard</h1>
 
-Welcome to your new app.
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (!loaded)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Today's Sales</h6>
+                    <h3>@FormatHelper.CLP(todayTotal)</h3>
+                    <small>@todayCount sale(s)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Last 7 Days</h6>
+                    <h3>@FormatHelper.CLP(weekTotal)</h3>
+                    <small>@weekCount sale(s)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-dark h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Products</h6>
+                    <h3>@productCount</h3>
+                    <small>in catalog</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Low Stock Alerts</h6>
+                    <h3>@lowStock.Count</h3>
+                    <small>product(s) need restock</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-7">
+            <h4>Low Stock Products</h4>
+            @if (lowStock.Count == 0)
+            {
+                <p class="text-muted">All products are above their low-stock threshold.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr><th>Product</th><th>Stock</th><th>Threshold</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in lowStock)
+                        {
+                            <tr>
+                                <td>@p.Name</td>
+                                <td><span class="badge bg-danger">@p.Stock</span></td>
+                                <td>@p.LowStockThreshold</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="col-md-5">
+            <h4>Recent Sales</h4>
+            @if (recentSales.Count == 0)
+            {
+                <p class="text-muted">No sales registered yet.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr><th>Date</th><th>Items</th><th>Total</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in recentSales)
+                        {
+                            <tr>
+                                <td>@s.Date.ToString("g")</td>
+                                <td>@s.Items.Count</td>
+                                <td>@FormatHelper.CLP(s.Total)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool loaded;
+    private string? errorMessage;
+    private decimal todayTotal, weekTotal;
+    private int todayCount, weekCount, productCount;
+    private List<Product> lowStock = new();
+    private List<Sale> recentSales = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // A short-lived context per operation is the recommended pattern
+            // for Blazor Server with Entity Framework Core.
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var today = DateTime.Today;
+            var weekAgo = today.AddDays(-7);
+
+            var sales = await db.Sales.Include(s => s.Items).ToListAsync();
+            todayCount = sales.Count(s => s.Date >= today);
+            todayTotal = sales.Where(s => s.Date >= today).Sum(s => s.Total);
+            weekCount = sales.Count(s => s.Date >= weekAgo);
+            weekTotal = sales.Where(s => s.Date >= weekAgo).Sum(s => s.Total);
+
+            productCount = await db.Products.CountAsync();
+            lowStock = await db.Products.Where(p => p.Stock <= p.LowStockThreshold)
+                                        .OrderBy(p => p.Stock).ToListAsync();
+            recentSales = sales.OrderByDescending(s => s.Date).Take(5).ToList();
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load the dashboard: {ex.Message}";
+        }
+    }
+}
