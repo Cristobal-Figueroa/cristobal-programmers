@@ -1,10 +1,15 @@
+using Microsoft.EntityFrameworkCore;
 using StockWise.Components;
+using StockWise.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddDbContext<StockWiseContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("StockWiseContext")));
 
 var app = builder.Build();
 
